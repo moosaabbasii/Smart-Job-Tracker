@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Job Tracker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+  <!-- ── LOGIN VIEW ── -->
+  <div id="loginView">
+    <div class="header">
+      <div class="header-left">
+        <span class="logo">💼</span>
+        <div>
+          <div class="title">Smart Job Tracker</div>
+          <div class="subtitle">Sign in to start tracking</div>
+        </div>
+      </div>
+    </div>
+    <div class="login-body">
+      <div id="loginError" class="login-error" style="display:none"></div>
+      <label class="login-label">Email</label>
+      <input id="loginEmail" class="login-input" type="email" placeholder="you@email.com" />
+      <label class="login-label">Password</label>
+      <input id="loginPassword" class="login-input" type="password" placeholder="••••••••" />
+      <button id="loginBtn" class="login-btn">Sign In</button>
+    </div>
+  </div>
+
+  <!-- ── DASHBOARD VIEW ── -->
+  <div id="dashView" style="display:none">
+    <div class="header">
+      <div class="header-left">
+        <span class="logo">💼</span>
+        <div>
+          <div class="title">Smart Job Tracker</div>
+          <div class="subtitle">Auto-logging active</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="status-dot" id="statusDot" title="Checking API..."></div>
+        <button class="logout-btn" id="logoutBtn" title="Sign out">↩</button>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-num" id="totalToday">—</div>
+        <div class="stat-lbl">Today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="totalWeek">—</div>
+        <div class="stat-lbl">This Week</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="totalAll">—</div>
+        <div class="stat-lbl">All Time</div>
+      </div>
+    </div>
+
+    <!-- Log This Job button — shown when on a job page -->
+    <div id="logJobSection" style="display:none;padding:10px 12px 0">
+      <div class="log-job-card">
+        <div class="log-job-info">
+          <div class="log-job-role" id="detectedRole">—</div>
+          <div class="log-job-company" id="detectedCompany">—</div>
+        </div>
+        <button class="log-job-btn" id="logJobBtn">Log Job ✓</button>
+      </div>
+      <div id="logJobMsg" style="display:none;font-size:0.72rem;padding:4px 2px"></div>
+    </div>
+
+    <div class="section-title">Recently Logged</div>
+
+    <div id="appList" class="app-list">
+      <div class="empty">No applications logged yet.<br>Apply to a job and it'll appear here automatically.</div>
+    </div>
+
+    <div class="footer">
+      <a class="footer-link" id="openDashboard" href="https://smart-job-tracker.streamlit.app" target="_blank">Open Dashboard ↗</a>
+      <button class="clear-btn" id="clearBtn">Clear History</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

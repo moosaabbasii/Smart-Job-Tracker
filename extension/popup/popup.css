@@ -1,0 +1,273 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  width: 340px;
+  background: #0d0d1a;
+  color: #fff;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* ── HEADER ── */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 16px 12px;
+  background: linear-gradient(135deg, #0d1b2a, #1a1a3e);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.header-left { display: flex; align-items: center; gap: 10px; }
+.logo        { font-size: 1.5rem; }
+.title       { font-size: 0.95rem; font-weight: 700; color: #fff; }
+.subtitle    { font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-top: 1px; }
+
+/* API status dot */
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #555;
+  transition: background 0.3s;
+}
+.status-dot.online  { background: #2ECC71; box-shadow: 0 0 6px #2ECC7188; }
+.status-dot.offline { background: #E74C3C; box-shadow: 0 0 6px #E74C3C88; }
+
+/* ── STATS ── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.stat-card {
+  background: #111120;
+  padding: 12px 8px;
+  text-align: center;
+}
+.stat-num {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #4A90D9;
+  line-height: 1;
+}
+.stat-lbl {
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 3px;
+  font-weight: 500;
+}
+
+/* ── SECTION TITLE ── */
+.section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 10px 16px 6px;
+}
+
+/* ── APP LIST ── */
+.app-list {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+.app-list::-webkit-scrollbar       { width: 4px; }
+.app-list::-webkit-scrollbar-track { background: transparent; }
+.app-list::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+.empty {
+  text-align: center;
+  padding: 28px 16px;
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.25);
+  line-height: 1.6;
+}
+
+.app-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 9px 10px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-left: 3px solid #4A90D9;
+  transition: background 0.2s;
+}
+.app-item:hover { background: rgba(255,255,255,0.06); }
+
+.app-info .role    { font-size: 0.82rem; font-weight: 600; color: #fff; }
+.app-info .company { font-size: 0.73rem; color: rgba(255,255,255,0.4); margin-top: 1px; }
+.app-right         { text-align: right; flex-shrink: 0; margin-left: 8px; }
+.app-source {
+  font-size: 0.62rem;
+  background: rgba(74,144,217,0.15);
+  border: 1px solid rgba(74,144,217,0.3);
+  color: #4A90D9;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-weight: 600;
+}
+.app-time {
+  font-size: 0.62rem;
+  color: rgba(255,255,255,0.2);
+  margin-top: 3px;
+}
+
+/* ── FOOTER ── */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  background: #0d0d1a;
+}
+.footer-link {
+  font-size: 0.75rem;
+  color: #4A90D9;
+  text-decoration: none;
+  font-weight: 500;
+}
+.footer-link:hover { text-decoration: underline; }
+.clear-btn {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.25);
+  background: none;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 5px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.2s;
+}
+.clear-btn:hover {
+  color: #E74C3C;
+  border-color: rgba(231,76,60,0.3);
+}
+
+/* ── LOG THIS JOB CARD ── */
+.log-job-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(46,204,113,0.08);
+  border: 1px solid rgba(46,204,113,0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  gap: 10px;
+}
+.log-job-info { flex: 1; min-width: 0; }
+.log-job-role {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.log-job-company {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.4);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.log-job-btn {
+  flex-shrink: 0;
+  background: #2ECC71;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: background 0.2s;
+}
+.log-job-btn:hover    { background: #27AE60; }
+.log-job-btn:disabled { background: #1a7a42; cursor: not-allowed; }
+
+/* ── LOGIN VIEW ── */
+.login-body {
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.login-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-top: 8px;
+}
+.login-input {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 7px;
+  color: #fff;
+  font-size: 0.85rem;
+  padding: 9px 12px;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.login-input:focus { border-color: #4A90D9; }
+.login-btn {
+  margin-top: 14px;
+  width: 100%;
+  background: #4A90D9;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 10px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: background 0.2s;
+}
+.login-btn:hover    { background: #357ABD; }
+.login-btn:disabled { background: #2a5a8a; cursor: not-allowed; }
+.login-error {
+  background: rgba(231,76,60,0.12);
+  border: 1px solid rgba(231,76,60,0.3);
+  color: #E74C3C;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+.logout-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 5px;
+  color: rgba(255,255,255,0.3);
+  font-size: 0.8rem;
+  padding: 3px 7px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.logout-btn:hover {
+  color: #E74C3C;
+  border-color: rgba(231,76,60,0.3);
+}
