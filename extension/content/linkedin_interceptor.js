@@ -4,19 +4,24 @@
 (function () {
   'use strict';
 
-  function notifyApplied() {
-    console.log('[SmartJobTracker-MAIN] Firing __sjt_applied__ event');
+  function notifyApplied(url) {
+    console.log('[SmartJobTracker-MAIN] ✅ Apply request matched:', url);
     document.dispatchEvent(new CustomEvent('__sjt_applied__', { bubbles: true }));
   }
 
-  // LinkedIn job application POSTs match one of these patterns:
-  // - /jobs/applybutton/
-  // - /jobs/application-manager/
-  // - /jobs/applicantTracking/
-  // - /apply (general fallback)
-  // - /uas/authenticate (sometimes used)
+  // LinkedIn's job application submission goes through their internal
+  // "voyager" API. The exact queryId/path changes over time, but it is
+  // always under /voyager/api/ and the URL or request body mentions
+  // "jobApplication" or "easyApply" (case varies).
   function isApplyURL(url) {
-    return /linkedin\.com.*\/(applybutton|application-manager|applicantTracking|easyApplyModal|apply)/i.test(url);
+    if (!/linkedin\.com\/voyager\/api\//i.test(url)) return false;
+    return /jobapplication|easyapply|jobapply/i.test(url);
+  }
+
+  // Broadcast every outgoing POST URL to the isolated-world script so it can
+  // self-learn which endpoint corresponds to a successful application.
+  function logCandidate(kind, url, status) {
+    document.dispatchEvent(new CustomEvent('__sjt_post__', { detail: String(url || '') }));
   }
 
   // ── Intercept fetch ──────────────────────────────────────────────────────────
@@ -31,15 +36,28 @@
 
     if (method === 'POST') {
       promise.then(response => {
-        // Clone check — don't consume the real response body
+        logCandidate('fetch', url, response.status);
         if (response.ok && isApplyURL(url)) {
-          notifyApplied();
+          notifyApplied(url);
         }
       }).catch(() => {});
     }
 
     return promise;
   };
+
+  // ── Intercept sendBeacon ─────────────────────────────────────────────────────
+  // LinkedIn fires some submissions (and lots of tracking) via sendBeacon,
+  // which is NOT covered by the fetch/XHR patches above.
+  const origBeacon = navigator.sendBeacon?.bind(navigator);
+  if (origBeacon) {
+    navigator.sendBeacon = function (url, data) {
+      const u = String(url || '');
+      logCandidate('beacon', u);
+      if (isApplyURL(u)) notifyApplied(u);
+      return origBeacon(url, data);
+    };
+  }
 
   // ── Intercept XHR ───────────────────────────────────────────────────────────
   const origOpen = XMLHttpRequest.prototype.open;
@@ -52,12 +70,13 @@
   const origSend = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.send = function (...args) {
     this.addEventListener('load', () => {
-      if (
-        this.__sjt_method?.toUpperCase() === 'POST' &&
-        this.status >= 200 && this.status < 300 &&
-        isApplyURL(this.__sjt_url)
-      ) {
-        notifyApplied();
+      const method = this.__sjt_method?.toUpperCase();
+      const url     = this.__sjt_url;
+      if (method === 'POST') {
+        logCandidate('xhr', url, this.status);
+        if (this.status >= 200 && this.status < 300 && isApplyURL(url)) {
+          notifyApplied(url);
+        }
       }
     });
     return origSend.apply(this, args);

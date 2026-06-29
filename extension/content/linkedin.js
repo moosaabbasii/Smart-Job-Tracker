@@ -1,16 +1,9 @@
-// Detection strategies (whichever fires first wins):
-// 1. Network interception event from linkedin_interceptor.js (MAIN world)
-// 2. MutationObserver watching for success messages after submit click
-// 3. DOM polling every 2s — but ONLY after submit button is clicked
-
 (function () {
   'use strict';
 
   let lastLogged    = '';
-  let alreadyFired  = false;
-  let submitClicked = false; // guard — only trust DOM signals after submit click
+  let alreadyLogged = false; // dedup gate — only one source gets to log per application
 
-  // ── Job info extraction ────────────────────────────────────────────────────
   function extractJobInfo() {
     const role = document.querySelector('h1')?.innerText?.trim() || '';
 
@@ -39,9 +32,13 @@
     return { role, company };
   }
 
-  // ── Log once per unique role+company ──────────────────────────────────────
   function logApplication(source) {
-    if (alreadyFired) return;
+    // Dedup: whichever detector fires first wins. Network is checked first
+    // each cycle, so it naturally takes priority when both fire close together.
+    if (alreadyLogged) {
+      console.log(`[SmartJobTracker] Ignored duplicate detection via ${source} (already logged)`);
+      return;
+    }
 
     const { role, company } = extractJobInfo();
     if (!role || !company) return;
@@ -49,104 +46,117 @@
     const key = `${role}||${company}`;
     if (key === lastLogged) return;
     lastLogged    = key;
-    alreadyFired  = true;
-    submitClicked = false;
+    alreadyLogged = true;
 
-    setTimeout(() => { alreadyFired = false; }, 30_000);
+    // Cooldown — allow re-logging the same job if you genuinely re-apply later
+    setTimeout(() => { alreadyLogged = false; }, 30_000);
 
     console.log(`[SmartJobTracker] ✅ Detected via ${source}:`, { role, company });
     chrome.runtime.sendMessage({
       type: 'JOB_APPLIED',
       data: { company, role, source: 'LinkedIn' },
     });
+
+    // If a DOM detector caught this (not the network path), use it as a
+    // training signal to learn the real apply endpoint.
+    if (source === 'mutation' || source === 'dom-poll') calibrate();
   }
 
-  // ── Track submit button clicks ────────────────────────────────────────────
-  // DOM/mutation detection only arms itself after the user actually clicks submit.
-  // This prevents false positives from "Applied X days ago" text on the page.
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    const text  = (btn.innerText || '').toLowerCase();
-    const label = (btn.getAttribute('aria-label') || '').toLowerCase();
-    const combined = text + ' ' + label;
-    if (combined.includes('submit application') || combined.includes('submit')) {
-      console.log('[SmartJobTracker] Submit button clicked — arming DOM detection');
-      submitClicked = true;
-      // Disarm after 15s in case submit fails / user is still on form
-      setTimeout(() => { submitClicked = false; }, 15_000);
-    }
-  }, true);
+  // ── Strategy 1 (PRIMARY): network interception ─────────────────────────────
+  // Fires either from the interceptor's hard-coded match, or from a URL the
+  // extension has *learned* corresponds to a successful apply (see below).
+  document.addEventListener('__sjt_applied__', () => logApplication('network'));
 
-  // ── Strategy 1: Network interception event (no guard needed) ──────────────
-  document.addEventListener('__sjt_applied__', () => {
-    console.log('[SmartJobTracker] Network event received');
-    logApplication('network');
+  // ── SELF-LEARNING: figure out the apply endpoint automatically ─────────────
+  // The interceptor broadcasts every POST URL. We keep a short rolling buffer
+  // of recent POSTs; when the DOM detector confirms a successful apply, the
+  // URLs that fired in the seconds just before are "candidates". A candidate
+  // that lines up with 2 separate successful applies gets promoted to the
+  // confirmed apply endpoint — after which network detection runs on its own.
+  let recentPosts   = [];          // [{ url, time }]
+  let confirmedUrl  = null;        // learned apply endpoint, once known
+
+  // Ignore obvious noise: tracking, telemetry, realtime, media, metrics.
+  const JUNK = /(\/li\/track|\/realtime|realtimeFrontend|\/metrics|\/beacon|\.licdn\.com|voyagerMetrics|\/messaging\/|presence|typing)/i;
+
+  chrome.storage.local.get('sjt_confirmed_apply_url', (r) => {
+    confirmedUrl = r.sjt_confirmed_apply_url || null;
+    if (confirmedUrl) console.log('[SmartJobTracker] Using learned apply endpoint:', confirmedUrl);
   });
 
-  // ── Strategy 2: MutationObserver (only fires after submitClicked) ─────────
-  // Only check "application was sent" / "application submitted" — very specific
-  // post-submit phrases that don't appear during form filling.
-  const POST_SUBMIT_PHRASES = [
+  document.addEventListener('__sjt_post__', (e) => {
+    const url = e.detail;
+    if (!url || JUNK.test(url)) return;
+    recentPosts.push({ url, time: Date.now() });
+    // keep only the last 15 seconds
+    const cutoff = Date.now() - 15_000;
+    recentPosts = recentPosts.filter(p => p.time > cutoff);
+    // If we've already learned the endpoint, fire network detection directly.
+    if (confirmedUrl && url.split('?')[0] === confirmedUrl) {
+      logApplication('network-learned');
+    }
+  });
+
+  // Called when the DOM detector confirms an apply. Scores recent POST URLs.
+  function calibrate() {
+    if (confirmedUrl) return; // already learned — nothing to do
+    const cutoff = Date.now() - 12_000;
+    const candidates = [...new Set(
+      recentPosts.filter(p => p.time > cutoff).map(p => p.url.split('?')[0])
+    )];
+    if (!candidates.length) return;
+
+    chrome.storage.local.get('sjt_url_scores', (r) => {
+      const scores = r.sjt_url_scores || {};
+      for (const url of candidates) {
+        scores[url] = (scores[url] || 0) + 1;
+        if (scores[url] >= 2) {
+          confirmedUrl = url;
+          chrome.storage.local.set({ sjt_confirmed_apply_url: url });
+          console.log('[SmartJobTracker] 🎓 Learned apply endpoint:', url);
+        }
+      }
+      chrome.storage.local.set({ sjt_url_scores: scores });
+    });
+  }
+
+  // ── Strategy 2 & 3: DOM — only match unambiguous post-submit phrases ───────
+  // These phrases ONLY appear after a successful Easy Apply submission.
+  // They do NOT appear on job listing pages passively.
+  const SUCCESS_PHRASES = [
     'application was sent',
     'application submitted',
     'successfully applied',
   ];
 
-  function isPostSubmitText(text) {
-    const lower = text.toLowerCase();
-    return POST_SUBMIT_PHRASES.some(p => lower.includes(p));
+  function hasSuccess(text) {
+    const lower = (text || '').toLowerCase();
+    return SUCCESS_PHRASES.some(p => lower.includes(p));
   }
 
-  function checkNodeForSuccess(node) {
-    if (node.nodeType !== Node.ELEMENT_NODE) return false;
-    const text = node.innerText || '';
-    if (isPostSubmitText(text)) return true;
-    const headings = node.querySelectorAll?.('h1,h2,h3');
-    if (headings) {
-      for (const h of headings) {
-        if (isPostSubmitText(h.innerText || '')) return true;
-      }
-    }
-    return false;
-  }
-
-  const observer = new MutationObserver((mutations) => {
-    if (!submitClicked) return; // don't check unless user clicked submit
+  // MutationObserver — catches the success modal the instant it appears
+  new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
-        if (checkNodeForSuccess(node)) {
-          console.log('[SmartJobTracker] MutationObserver detected success');
+        if (node.nodeType === Node.ELEMENT_NODE && hasSuccess(node.innerText)) {
           logApplication('mutation');
           return;
         }
       }
     }
-  });
+  }).observe(document.body, { childList: true, subtree: true });
 
-  observer.observe(document.body, { childList: true, subtree: true });
-
-  // ── Strategy 3: DOM polling (only active after submitClicked) ─────────────
-  function pollCheck() {
-    if (!submitClicked) return false;
-
-    // Only look inside the Easy Apply modal (dialog), not the whole page.
-    // This avoids matching "Applied 3 days ago" badges on job cards.
-    const dialog = document.querySelector('[role="dialog"]');
-    const scope  = dialog || document.body;
-
-    const alerts = scope.querySelectorAll('[role="alert"], [role="status"]');
-    for (const el of alerts) {
-      if (isPostSubmitText(el.innerText || '')) return true;
-    }
-    if (scope.querySelector('[class*="inline-feedback--success"]')) return true;
-    if (scope.querySelector('.post-apply-timeline, [class*="post-apply"]')) return true;
-    return false;
-  }
-
+  // Polling fallback every 2s
   setInterval(() => {
-    if (pollCheck()) logApplication('dom-poll');
+    const dialog = document.querySelector('[role="dialog"]') || document.body;
+    const alerts = dialog.querySelectorAll('[role="alert"],[role="status"]');
+    for (const el of alerts) {
+      if (hasSuccess(el.innerText)) { logApplication('dom-poll'); return; }
+    }
+    if (dialog.querySelector('[class*="inline-feedback--success"]')) {
+      logApplication('dom-poll');
+    }
   }, 2000);
 
-  console.log('[SmartJobTracker] LinkedIn listener active ✅ (network + mutation + dom-poll)');
+  console.log('[SmartJobTracker] LinkedIn listener active (network + mutation + dom-poll)');
 })();

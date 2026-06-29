@@ -1,9 +1,13 @@
 import streamlit as st
 import requests
 import json
+import time
 import boto3
 from botocore.exceptions import ClientError
 from datetime import date, datetime, timedelta
+from streamlit_local_storage import LocalStorage
+
+local_storage = LocalStorage()
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 API_BASE        = "https://k9gpcxpt4j.execute-api.us-east-1.amazonaws.com/prod"
@@ -259,7 +263,7 @@ for key in ("editing", "confirm_delete", "show_actions"):
     if key not in st.session_state:
         st.session_state[key] = {}
 
-for key in ("id_token", "auth_mode", "pending_email"):
+for key in ("id_token", "refresh_token", "token_expiry", "auth_mode", "pending_email", "restored"):
     if key not in st.session_state:
         st.session_state[key] = None
 if st.session_state.auth_mode is None:
@@ -270,6 +274,18 @@ if st.session_state.auth_mode is None:
 def auth_headers():
     return {"Authorization": f"Bearer {st.session_state.id_token}"}
 
+def save_session(id_token, refresh_token, expires_in):
+    st.session_state.id_token     = id_token
+    st.session_state.refresh_token = refresh_token
+    st.session_state.token_expiry  = time.time() + expires_in
+    local_storage.setItem("sjt_refresh_token", refresh_token)
+
+def clear_session():
+    st.session_state.id_token      = None
+    st.session_state.refresh_token = None
+    st.session_state.token_expiry  = None
+    local_storage.deleteItem("sjt_refresh_token")
+
 def cognito_login(email, password):
     try:
         resp = cognito.initiate_auth(
@@ -278,9 +294,25 @@ def cognito_login(email, password):
             ClientId=CLIENT_ID,
         )
         tokens = resp["AuthenticationResult"]
-        return tokens["IdToken"], None
+        save_session(tokens["IdToken"], tokens["RefreshToken"], tokens["ExpiresIn"])
+        return True, None
     except ClientError as e:
-        return None, e.response["Error"]["Message"]
+        return False, e.response["Error"]["Message"]
+
+def refresh_session(refresh_token):
+    try:
+        resp = cognito.initiate_auth(
+            AuthFlow="REFRESH_TOKEN_AUTH",
+            AuthParameters={"REFRESH_TOKEN": refresh_token},
+            ClientId=CLIENT_ID,
+        )
+        tokens = resp["AuthenticationResult"]
+        # Cognito doesn't re-issue a refresh token on refresh — keep the old one
+        save_session(tokens["IdToken"], refresh_token, tokens["ExpiresIn"])
+        return True
+    except ClientError:
+        clear_session()
+        return False
 
 def cognito_signup(email, password):
     try:
@@ -306,6 +338,23 @@ def cognito_confirm(email, code):
         return e.response["Error"]["Message"]
 
 
+# ── SESSION RESTORE ────────────────────────────────────────────────────────────
+# A new browser tab/connection means a brand-new st.session_state — but the
+# refresh token survives in the browser's localStorage. Use it to silently
+# log back in without showing the login form again.
+if not st.session_state.id_token and not st.session_state.restored:
+    st.session_state.restored = True
+    stored_refresh = local_storage.getItem("sjt_refresh_token")
+    if stored_refresh:
+        if refresh_session(stored_refresh):
+            st.rerun()
+
+# Preemptive refresh — renew 5 minutes before the ID token actually expires
+if st.session_state.id_token and st.session_state.token_expiry:
+    if time.time() > st.session_state.token_expiry - 300:
+        refresh_session(st.session_state.refresh_token)
+
+
 # ── AUTH GATE ─────────────────────────────────────────────────────────────────
 if not st.session_state.id_token:
     st.markdown("""
@@ -326,11 +375,10 @@ if not st.session_state.id_token:
                     password = st.text_input("Password", type="password")
                     submitted = st.form_submit_button("Sign In", use_container_width=True)
                 if submitted:
-                    token, err = cognito_login(email, password)
+                    ok, err = cognito_login(email, password)
                     if err:
                         st.error(err)
                     else:
-                        st.session_state.id_token = token
                         st.rerun()
                 if st.button("Don't have an account? Sign up", use_container_width=True):
                     st.session_state.auth_mode = "signup"
@@ -449,7 +497,7 @@ with h2:
             st.rerun()
     with col_s:
         if st.button("Sign Out", key="logout"):
-            st.session_state.id_token = None
+            clear_session()
             fetch_applications.clear()
             st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
